@@ -3,40 +3,46 @@ const Util = require('../../utils/util.js')
 
 Page({
   data: {
-    available: false,
-    discovering: false,
-    deviceId: '',
-    serviceId: '',
-    characteristicId: '',
-    devices: [],
-    devicesStr: '',
-    deviceIndex: 0,
-    dataId: '',
+    available: false, // 设备可用
+    discovering: false,  // 搜索状态
+    serviceId: '', // 服务Id
+    characteristicId: '', // 特征值
+    deviceId: '', // mac 地址 （ios的mac地址是UUID，由于隐私保护的原因引起的）
+    name: '', // 设备编号 完整： ET01-XXXXX
   },
   onLoad() {
     // console.log(Util.md5('123'))
   },
   opendoor(e) {
     let id = e.target.dataset.id;
-    console.info(124, id)
-
-    // if (this.data.devicesStr && id == this.data.dataId) {
-    //   console.info('连接')
-    //   this.connectBluetooth()
-    // } else if (this.data.devicesStr && id != this.data.dataId) {
-    //   this.watchBluetoothStateChange()
-    //   this.searchBluetooth()
-    //   console.info('再次连接')
-    // } else {
-    this.initBluetooth()
-    console.info('首次连接')
-    // }
+    console.info('设备的名称', id)
     this.setData({
-      dataId: id
+      name: id
     })
+
+    // 仅仅是单个设备 (wx.closeBLEConnection 只需要断开这个连接即可)
+    // if (this.data.serviceId){
+    //   this.this.connectBluetooth()
+    // }else {
+    //   this.initBluetooth()
+    // }
+
+    // 多个设备连接（切换设备的时候的需要 wx.closeBLEConnection 和 wx.closeBluetoothAdapter 释放资源）
+    this.initBluetooth()
   },
   initBluetooth() {
     let that = this;
+    
+    // 版本过低兼容
+    if (!wx.openBluetoothAdapter) {
+      wx.showModal({
+        title: '提示',
+        showCancel: false,
+        content: '当前微信版本过低，无法使用该功能，请升级到最新微信版本后重试。',
+      })
+      return;
+    }
+
     wx.openBluetoothAdapter({
       success(res) {
         console.log("初始化蓝牙模块 --- 已开启")
@@ -60,9 +66,9 @@ Page({
    */
   watchBluetoothStateChange() {
     let that = this;
+
     wx.onBluetoothAdapterStateChange((res) => {
-      console.log("监听蓝牙状态改变")
-      console.log(res)
+      console.log("监听蓝牙状态改变", res)
       /**
        * 搜索状态
        */
@@ -86,6 +92,7 @@ Page({
           console.log('蓝牙适配器不可用')
         } else {
           if (!res.discovering && !that.data.devices.length) {
+            console.info(789)
             that.searchBluetooth()
           }
         }
@@ -102,6 +109,7 @@ Page({
       success(res) {
         console.log("查找设备")
         that.watchBluetoothFound()
+        // 5s 停止搜索
         setTimeout(that.stopSearchBluetooth, 5000)
       }
     })
@@ -115,13 +123,13 @@ Page({
 
       let device = res.devices[0]
       console.info('shebei', device, device.localName)
-      if (device.localName && device.localName.indexOf(`ET01-${that.data.dataId}`) > -1) {
-        console.log(`查找到 ET01-${that.data.dataId}`, '设备id', device.deviceId)
+      if (device.localName && device.localName.indexOf(`ET01-${that.data.name}`) > -1) {
+        console.log(`查找到 ET01-${that.data.name}`, '设备id', device.deviceId)
 
         that.setData({
-          devicesStr: device.deviceId
+          deviceId: device.deviceId
         })
-        console.info('连接成功---', that.data.devicesStr)
+        console.info('连接成功---', that.data.deviceId)
         that.connectBluetooth()
 
         // 连接成功 需要断开蓝牙搜索
@@ -143,29 +151,29 @@ Page({
   /**
    * 获取设备列表
    */
-  getBluetoothDevices() {
-    let that = this;
-    wx.getBluetoothDevices({
-      success: function(res) {
-        console.log('获取已发现的蓝牙设备', res.devices)
-        let devices = res.devices.filter((item) => item.localName == "JDY-16")
-        if (devices.length) {
-          that.setData({
-            devices: devices
-          })
-          console.log(that.data.devices)
-        }
-      }
-    })
-  },
+  // getBluetoothDevices() {
+  //   let that = this;
+  //   wx.getBluetoothDevices({
+  //     success: function(res) {
+  //       console.log('获取已发现的蓝牙设备', res.devices)
+  //       let devices = res.devices.filter((item) => item.localName == "JDY-16")
+  //       if (devices.length) {
+  //         that.setData({
+  //           devices: devices
+  //         })
+  //         console.log(that.data.devices)
+  //       }
+  //     }
+  //   })
+  // },
   /**
    * 连接设备
    */
   connectBluetooth() {
-    console.info('connectBluetooth', this.data.devicesStr)
+    console.info('connectBluetooth', this.data.deviceId)
     let that = this;
     wx.createBLEConnection({
-      deviceId: that.data.devicesStr,
+      deviceId: that.data.deviceId,
       success(res) {
         console.log("连接成功设备---" + JSON.stringify(res))
         that.getBluetoothServers()
@@ -181,12 +189,14 @@ Page({
    */
   closeConnectBluetooth() {
     let that = this;
+    // 断开BLE的连接
     wx.closeBLEConnection({
-      deviceId: that.data.devicesStr,
+      deviceId: that.data.deviceId,
       success(res) {
         console.log("手动断开连接")
       }
     })
+     // 断开蓝牙的连接 （初始化所有的状态）
     wx.closeBluetoothAdapter({
       success(res) {
         console.log('断开蓝牙', res)
@@ -194,10 +204,7 @@ Page({
           deviceId: '',
           serviceId: '',
           characteristicId: '',
-          devices: [],
-          devicesStr: '',
-          deviceIndex: 0,
-          dataId: '',
+          name: '',
         })
       }
     })
@@ -208,7 +215,7 @@ Page({
   getBluetoothServers() {
     let that = this;
     wx.getBLEDeviceServices({
-      deviceId: that.data.devicesStr,
+      deviceId: that.data.deviceId,
       success(res) {
         console.log('获取设备服务', res.services)
         that.setData({
@@ -224,7 +231,7 @@ Page({
   getBluetoothCharacteristics() {
     let that = this;
     wx.getBLEDeviceCharacteristics({
-      deviceId: that.data.devicesStr,
+      deviceId: that.data.deviceId,
       serviceId: that.data.serviceId,
       success(res) {
         console.info('获取设备某个服务特征值列表', res)
@@ -232,14 +239,6 @@ Page({
           characteristicId: res.characteristics[0].uuid
         })
         that.notifyBluetoothCharacteristicValueChange()
-        // for (let i = 0; i < res.characteristics.length; i++) {
-        //   if (res.characteristics[i].properties.write) {
-        //     console.log(res.characteristics[i])
-        //     that.setData({ characteristicId: res.characteristics[i].uuid })
-        //     that.notifyBluetoothCharacteristicValueChange()
-        //     break
-        //   }
-        // }
       },
     })
   },
@@ -249,7 +248,7 @@ Page({
   notifyBluetoothCharacteristicValueChange() {
     let that = this;
     wx.notifyBLECharacteristicValueChange({
-      deviceId: that.data.devicesStr,
+      deviceId: that.data.deviceId,
       serviceId: that.data.serviceId,
       characteristicId: that.data.characteristicId,
       state: true,
@@ -266,25 +265,12 @@ Page({
   watchBluetoothCharacteristicValueChange() {
     let that = this;
     console.log("监听设备的特征值变化")
-    // wx.onBLECharacteristicValueChange(function (res) {
-    //   console.log("监听到返回信息", res)
-    //   console.log(that.hexToStr(that.buf2hex(res.value)))
-    //   if (that.hexToStr(that.buf2hex(res.value)) == '666666') {
-    //     that.setData({
-    //       deviceId: that.data.devicesStr
-    //     })
-    //     that.writeBluetoothCharacteristicValue('02')
-    //   } else if (that.hexToStr(that.buf2hex(res.value)) == '200') {
-    //     that.closeConnectBluetooth()
-    //   }
-    // })
-    // setTimeout(() => {
-    //   that.writeBluetoothCharacteristicValue('01')
-    // }, 20)
-
+    
     wx.onBLECharacteristicValueChange(function(res) {
+
       console.log('onBLECharacteristicValueChange', res)
       console.log('返回数据', that.ab2hex(res.value))
+      // 和硬件约定 7b010403a000dd 这个返回值是开门成功
       if (that.ab2hex(res.value) == '7b010403a000dd') {
         wx.showModal({
           title: '提示',
@@ -298,11 +284,7 @@ Page({
           showCancel: false
         })
       }
-      // console.info('hex', that.hexToString(that.ab2hex(res.value)))
-      // console.log('返回数据',that.hexToStr(that.buf2hex(res.value)))
-      // if (that.hexToStr(that.buf2hex(res.value)) == '200') {
       that.closeConnectBluetooth()
-      // }
     })
 
     setTimeout(() => {
@@ -316,28 +298,13 @@ Page({
    */
   writeBluetoothCharacteristicValue(type) {
     let that = this;
-    // if (type == '01') {
-    //   var str = Util.md5("5678") + "cd12345678"
-    //   var arr = that.strToHex(str)
-    //   var buffer = that.strToBuf(arr, type)
-    // } else if (type == '02') {
-    //   var str = Util.md5("5678cd12345678666666")
-    //   var arr = that.strToHex(str)
-    //   var buffer = that.strToBuf(arr, type)
-    // } else {
-    //   console.log('参数错误')
-    //   return false
-    // }
 
-    // console.info('buffer', buffer)
-
-    // 开门 
-
+    // 开门指令 
     var arr = ['7A', '01', '04', '03', 'A0', '00', 'DE']
-    console.info(8888, that.strToBuf(arr))
+    console.info('开门指令 转化 Buffer', that.strToBuf(arr))
 
     wx.writeBLECharacteristicValue({
-      deviceId: that.data.devicesStr,
+      deviceId: that.data.deviceId,
       serviceId: that.data.serviceId,
       characteristicId: that.data.characteristicId,
       value: that.strToBuf(arr),
@@ -346,36 +313,10 @@ Page({
       },
       fail(res) {
         console.log("写入失败 结束")
-        // let deviceIndex = that.data.deviceIndex;
-        // if (that.data.devices.length - 1 > deviceIndex) {
-        //   console.log("写入失败 连接下一个设备")
-        //   that.setData({
-        //     deviceIndex: deviceIndex + 1
-        //   })
-        //   that.connectBluetooth()
-        // } else {
-        //   console.log("写入失败 结束")
-        // }
       }
     })
   },
 
-  /**
-   * ArrayBuffer转16进制
-   */
-  buf2hex(buffer) {
-    return Array.prototype.map.call(new Uint8Array(buffer), x => x)
-  },
-  /**
-   * 字符串转hex
-   */
-  strToHex(str) {
-    var arr = [];
-    for (var i = 0; i < str.length; i++) {
-      arr.push(str.charCodeAt(i).toString(16))
-    }
-    return arr
-  },
   /**
    * hex转ArrayBuffer
    */
@@ -383,19 +324,10 @@ Page({
     var length = arr.length
     var buffer = new ArrayBuffer(length + 2)
     var dataview = new DataView(buffer)
-    // dataview.setUint8(0, '0x' + type)
-    // dataview.setUint8(1, '0x' + (length > 16 ? length.toString(16) : '0' + length.toString(16)))
     for (let i = 0; i < length; i++) {
       dataview.setUint8(i, '0x' + arr[i])
     }
     return buffer
-  },
-  /**
-   * hex转字符串
-   */
-  hexToStr(hex) {
-    let arr = Array.prototype.map.call(hex, x => String.fromCharCode(x))
-    return arr.join('')
   },
 
   // ArrayBuffer转16进度字符串示例
