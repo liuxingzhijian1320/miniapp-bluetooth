@@ -1,0 +1,9 @@
+.userinfo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 50rpx;
+}
+button {
+  margin-bottom: 30rpx;
+}

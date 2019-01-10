@@ -1,0 +1,4 @@
+  <view class="userinfo">
+    <button bindtap="opendoor" data-id='11110001' type="primary" size="mini"> 模拟开门 1 </button>
+    <button bindtap="opendoor" data-id='11110002' type="primary" size="mini"> 模拟开门 2 </button>
+  </view>
