@@ -109,8 +109,8 @@ Page({
       success(res) {
         console.log("查找设备")
         that.watchBluetoothFound()
-        // 5s 停止搜索
-        setTimeout(that.stopSearchBluetooth, 5000)
+        // 20s 停止搜索
+        setTimeout(that.stopSearchBluetooth, 20000)
       }
     })
   },
